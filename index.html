@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sinchai AI — IIT (BHU)</title>
+<meta name="description" content="Reads ESP32 field sensors over Bluetooth and predicts the drip irrigation water requirement per hectare.">
+<link rel="icon" href="assets/iit-bhu-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="css/style.css?v=1.1.1">
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+
+<header class="banner">
+  <div class="wrap banner-in">
+    <span class="logo"><img src="assets/iit-bhu-logo.png" alt="IIT (BHU) Varanasi logo" width="50" height="50"></span>
+    <div>
+      <p class="brand">Sinchai AI — IIT (BHU)</p>
+      <p class="tag">Smart drip irrigation, powered by ML · Varanasi</p>
+    </div>
+  </div>
+</header>
+
+<nav class="topbar" aria-label="Main">
+  <div class="wrap topbar-in">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-dash" aria-controls="view-dash" aria-selected="true" data-view="dash">Dashboard</button>
+      <button role="tab" id="tab-predict" aria-controls="view-predict" aria-selected="false" data-view="predict">Predict</button>
+      <button role="tab" id="tab-history" aria-controls="view-history" aria-selected="false" data-view="history">History</button>
+      <button role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" data-view="settings">Settings</button>
+    </div>
+    <div class="pills">
+      <span class="pill" id="pill-device"><span class="dot"></span><span>Not connected</span></span>
+      <span class="pill" id="pill-sheet" title="Google Sheet sync"><span class="dot"></span><span>Sheet off</span></span>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<!-- ============================== DASHBOARD ============================== -->
+<section id="view-dash" role="tabpanel" aria-labelledby="tab-dash" class="view">
+
+  <section class="card" aria-labelledby="h-connect">
+    <h2 id="h-connect"><span class="num">1</span> Connect ESP32</h2>
+    <p class="muted">Connect your ESP32 over Bluetooth Low Energy. It sends all sensors in one line, e.g.
+      <code>t:29.1,bt:29.4,p:1006.2,h:58.0,lux:41200,r:0.00</code></p>
+
+    <div id="bt-unsupported" class="alert" role="alert" hidden>
+      <strong>This browser can't connect to Bluetooth</strong>
+      <span>Open this page in <b>Chrome</b> or <b>Edge</b> on a laptop or Android phone. On iPhone, Bluetooth isn't supported — use <b>Enter manually</b> instead.</span>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="btn-connect" type="button">Connect device</button>
+      <button class="btn" id="btn-disconnect" type="button" disabled>Disconnect</button>
+      <button class="btn outline" id="btn-manual" type="button">Enter manually</button>
+      <button class="btn ghost" id="btn-sim" type="button" aria-pressed="false">Simulate ESP32</button>
+    </div>
+    <p class="hint" id="bt-hint">Use Chrome or Edge on a laptop or Android phone.</p>
+    <div class="status" id="status" role="status">Waiting for connection…</div>
+    <details class="log"><summary>Show debug log</summary><pre id="log" aria-live="off"></pre>
+      <p class="row small" style="margin-top:8px"><button class="btn" type="button" id="btn-demo-day">Load 24 h of demo readings</button><span class="muted">For testing the 24-hour window. Saved as "demo" and never sent to the sheet.</span></p>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-live">
+    <div class="card-head">
+      <h2 id="h-live"><span class="num">2</span> Live sensor readings</h2>
+      <span class="muted small" id="last-update">No data yet</span>
+    </div>
+    <div class="sensors" id="sensors">
+      <article class="sensor" data-k="t"><h3>Temperature</h3><p class="val"><span>—</span><small>°C</small></p><p class="sub">One-Wire probe (DS18B20)</p></article>
+      <article class="sensor" data-k="p"><h3>Pressure</h3><p class="val"><span>—</span><small>hPa</small></p><p class="sub">BMP280</p></article>
+      <article class="sensor" data-k="lux"><h3>Light</h3><p class="val"><span>—</span><small>lux</small></p><p class="sub">BH1750</p></article>
+      <article class="sensor" data-k="r"><h3>Rainfall (24 h)</h3><p class="val"><span>—</span><small>mm</small></p><p class="sub">Gravity rainfall sensor</p></article>
+      <article class="sensor" data-k="w"><h3>Wind speed</h3><p class="val"><span>—</span><small>m/s</small></p><p class="sub">3-cup anemometer (0–5 V)</p></article>
+      <article class="sensor" data-k="h" hidden><h3>Humidity</h3><p class="val"><span>—</span><small>% RH</small></p><p class="sub">BME280</p></article>
+      <article class="sensor" data-k="s" hidden><h3>Soil moisture</h3><p class="val"><span>—</span><small>%</small></p><p class="sub">Soil sensor</p></article>
+    </div>
+  </section>
+
+  <div class="grid-2">
+    <section class="card" aria-labelledby="h-chart">
+      <div class="card-head">
+        <h2 id="h-chart">Last 24 hours</h2>
+        <label class="inline">Show
+          <select id="chart-metric">
+            <option value="t">Temperature</option>
+            <option value="lux">Light</option>
+            <option value="p">Pressure</option>
+            <option value="r">Rainfall</option>
+            <option value="w">Wind speed</option>
+          </select>
+        </label>
+      </div>
+      <div id="chart" class="chart" role="img" aria-label="Chart of the last 24 hours"></div>
+    </section>
+
+    <section class="card dark" aria-labelledby="h-latest">
+      <h2 id="h-latest">Latest prediction</h2>
+      <div id="latest-pred"><p class="muted-light">No prediction yet. Connect the ESP32, then go to Predict.</p></div>
+      <button class="btn sun" type="button" data-goto="predict">Go to Step 3 — Predict</button>
+    </section>
+  </div>
+</section>
+
+<!-- ============================== PREDICT ============================== -->
+<section id="view-predict" role="tabpanel" aria-labelledby="tab-predict" class="view" hidden>
+  <div class="grid-2 predict-grid">
+    <section class="card" aria-labelledby="h-settings">
+      <h2 id="h-settings"><span class="num">3</span> Crop &amp; field</h2>
+      <form id="pred-form" class="form">
+        <label>Crop
+          <select id="crop"></select>
+        </label>
+        <label>Sowing / transplant date
+          <input type="date" id="sow" required>
+        </label>
+        <p class="small muted" id="stage-line"></p>
+        <label>Area (hectares)
+          <input type="number" id="area" min="0.01" step="0.01" value="1" required>
+        </label>
+        <fieldset class="seg">
+          <legend>Analysis window</legend>
+          <label><input type="radio" name="win" value="5m" checked><span>Last 5 minutes</span></label>
+          <label><input type="radio" name="win" value="24h"><span>Last 24 hours</span></label>
+        </fieldset>
+        <label class="check"><input type="checkbox" id="auto"> Repeat every 15 minutes and save to the sheet</label>
+        <button class="btn primary big" type="submit">Analyse &amp; predict</button>
+        <p class="small muted" id="data-line"></p>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="h-result" id="result-card">
+      <h2 id="h-result"><span class="num">4</span> Crop water requirement</h2>
+      <div id="result"><p class="muted">Press <b>Analyse &amp; predict</b> to run the model on your readings.</p></div>
+    </section>
+  </div>
+
+  <section class="card" aria-labelledby="h-how">
+    <h2 id="h-how">How the model decides</h2>
+    <ol class="how">
+      <li><b>Window.</b> Takes the last 5 minutes or the last 24 hours of readings and drops values outside sensor limits.</li>
+      <li><b>ETo (reference ET).</b> FAO-56 Penman–Monteith from temperature, pressure, light and wind. Sunlight comes from the BH1750. Humidity is estimated from the night low (the BMP280 has no humidity sensor), and until the wind sensor is connected the Varanasi monthly average wind is used.</li>
+      <li><b>ETc = Kc × ETo.</b> Kc follows the crop's growth stage, worked out from the sowing date.</li>
+      <li><b>Rain.</b> Rain from the last 24 hours, made effective with the USDA-SCS rule, is subtracted. Rain below 1 mm is ignored.</li>
+      <li><b>Thresholds.</b> Raining now → pause. Rain covers the need or soil is wet → skip. Heat, cold, wind and humidity add advice.</li>
+      <li><b>Litres.</b> Net mm ÷ drip efficiency × 10,000 = litres per hectare per day, then the run time from your emitter layout.</li>
+    </ol>
+  </section>
+</section>
+
+<!-- ============================== HISTORY ============================== -->
+<section id="view-history" role="tabpanel" aria-labelledby="tab-history" class="view" hidden>
+  <section class="card" aria-labelledby="h-readings">
+    <div class="card-head">
+      <h2 id="h-readings">Reading history</h2>
+      <div class="row">
+        <button class="btn" type="button" id="dl-readings">Download CSV</button>
+        <button class="btn danger" type="button" id="clear-readings">Clear</button>
+      </div>
+    </div>
+    <p class="small muted" id="readings-count"></p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Time</th><th>Source</th><th>Temp °C</th><th>Pressure hPa</th><th>Light lux</th><th>Rain mm</th><th>Wind m/s</th></tr></thead>
+      <tbody id="readings-body"></tbody>
+    </table></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-preds">
+    <div class="card-head">
+      <h2 id="h-preds">Prediction history</h2>
+      <div class="row">
+        <button class="btn" type="button" id="dl-preds">Download CSV</button>
+        <button class="btn danger" type="button" id="clear-preds">Clear</button>
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Time</th><th>Window</th><th>Crop</th><th>Stage</th><th>ETo mm</th><th>Kc</th><th>ETc mm</th><th>Rain eff. mm</th><th>Litres / ha / day</th><th>Decision</th></tr></thead>
+      <tbody id="preds-body"></tbody>
+    </table></div>
+  </section>
+</section>
+
+<!-- ============================== SETTINGS ============================== -->
+<section id="view-settings" role="tabpanel" aria-labelledby="tab-settings" class="view" hidden>
+  <form id="settings-form" class="settings">
+    <section class="card" aria-labelledby="h-gs">
+      <h2 id="h-gs">Google Sheet</h2>
+      <p class="muted small">Paste the Web App URL from your Apps Script deployment (see the setup guide). Readings and predictions are queued here and sent every 30 seconds, so nothing is lost if the internet drops.</p>
+      <label>Web App URL
+        <input type="url" id="gs-url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+      </label>
+      <label>Secret key <span class="muted small">(same as KEY in the script)</span>
+        <input type="text" id="gs-key" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="check"><input type="checkbox" id="gs-readings" checked> Save sensor readings</label>
+      <label>Save readings
+        <select id="gs-every">
+          <option value="0">Every reading</option>
+          <option value="60">1 per minute (average)</option>
+          <option value="300">1 per 5 minutes (average)</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="gs-preds" checked> Save predictions</label>
+      <div class="row">
+        <button class="btn" type="button" id="gs-test">Test connection</button>
+        <button class="btn" type="button" id="gs-flush">Send now</button>
+      </div>
+      <div class="status" id="gs-status" role="status">Not set up.</div>
+    </section>
+
+    <section class="card" aria-labelledby="h-field">
+      <h2 id="h-field">Field &amp; drip system</h2>
+      <div class="form-grid">
+        <label>Drip efficiency (%)<input type="number" id="f-eff" min="50" max="100" step="1"></label>
+        <label>Emitter discharge (L/h)<input type="number" id="f-q" min="0.1" step="0.1"></label>
+        <label>Emitter spacing (m)<input type="number" id="f-es" min="0.05" step="0.05"></label>
+        <label>Lateral (row) spacing (m)<input type="number" id="f-ls" min="0.1" step="0.05"></label>
+        <label>Anemometer height (m)<input type="number" id="f-wh" min="0.5" step="0.1"></label>
+        <label>Yield target Ya/Ym<input type="number" id="f-ya" min="0.5" max="1" step="0.01"></label>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h-th">
+      <h2 id="h-th">Thresholds</h2>
+      <p class="muted small">Rules the model uses to decide. Defaults suit drip irrigation around Varanasi.</p>
+      <div class="form-grid" id="th-grid"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-dev">
+      <h2 id="h-dev">Bluetooth device</h2>
+      <div class="form-grid">
+        <label>Device name starts with<input type="text" id="d-prefix"></label>
+        <label>Service UUID<input type="text" id="d-svc" spellcheck="false"></label>
+        <label>Data (notify) characteristic UUID<input type="text" id="d-chr" spellcheck="false"></label>
+      </div>
+    </section>
+
+    <div class="row"><button class="btn primary" type="submit">Save settings</button><button class="btn" type="button" id="reset-settings">Reset to defaults</button><span class="small" id="saved-msg" role="status"></span></div>
+  </form>
+</section>
+
+</main>
+
+<footer class="footer"><div class="wrap">Sinchai AI · IIT (BHU), Varanasi · model: threshold-v1 (FAO-56)</div></footer>
+
+<!-- Manual entry -->
+<dialog id="manual-dlg" aria-labelledby="h-manual">
+  <form method="dialog" id="manual-form" class="form">
+    <h2 id="h-manual">Enter readings manually</h2>
+    <div class="form-grid">
+      <label>Temperature (°C)<input type="number" step="0.1" name="t" required></label>
+      <label>Pressure (hPa)<input type="number" step="0.1" name="p" value="1005"></label>
+      <label>Light (lux) <span class="muted small">optional</span><input type="number" step="1" name="lux" min="0"></label>
+      <label>Rain since last entry (mm)<input type="number" step="0.1" name="r" min="0" value="0"></label>
+      <label>Wind speed (m/s) <span class="muted small">optional</span><input type="number" step="0.1" name="w" min="0"></label>
+      <label>Humidity (%) <span class="muted small">optional</span><input type="number" step="0.1" name="h" min="0" max="100"></label>
+    </div>
+    <div class="row">
+      <button class="btn primary" value="save" type="submit">Add reading</button>
+      <button class="btn" value="cancel" type="button" id="manual-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="js/config.js?v=1.1.1"></script>
+<script src="js/model.js?v=1.1.1"></script>
+<script src="js/app.js?v=1.1.1"></script>
+</body>
+</html>
